@@ -19,7 +19,9 @@ def deconv(in_channels, out_channels):
 backwarp_tenGrid = {}
 def backwarp(tenInput, tenFlow):
 	if str(tenFlow.shape) not in backwarp_tenGrid:
-		tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
+		tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 
+                             1.0 - (1.0 / tenFlow.shape[3]), 
+                             tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
 		tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
 
 		backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([ tenHor, tenVer ], 1).cuda()
@@ -92,7 +94,7 @@ class NetE(nn.Module):
     )
     
     # Subpixel Refinement Unit
-    self.S_fwarp = None
+    self.S_fwarp = backwarp
 
     self.S_conv = nn.Sequential(
       conv(feature_dim*2+2, feature_dim, 3, 1),
@@ -124,16 +126,28 @@ class NetE(nn.Module):
   def forward(self, f1, f2, prev_flow):
     # Matching Unit
     if prev_flow is None:
-      #reference: https://github.com/sniklaus/pytorch-liteflownet
-      prev_flow = 0.0
+      prev_flow = 0.0 #reference: https://github.com/sniklaus/pytorch-liteflownet
+      warped_f2 = f2
     else:
       prev_flow = self.M_upconv(prev_flow)
       # feature warping
-      f2 = self.M_fwarp(f2, prev_flow)
+      warped_f2 = self.M_fwarp(f2, prev_flow)
       
-    cost = self.M_corr_conv(torch.cat((f1, f2), dim=1))
-    # cost = self.M_corr(f1, f2, intStride=1)
-    pred_flow = self.M_conv(cost)
+    # cost = self.M_corr_conv(torch.cat((f1, f2), dim=1))
+    cost = self.M_corr(f1, warped_f2, intStride=1)
+    delta_flow = self.M_conv(cost)
+    
+    pred_flow = prev_flow + delta_flow # elementwise-sum
+
+    # Subpixel Refinement
+    warped_f2 = self.S_fwarp(f2, pred_flow)
+    delta_flow = self.S_conv(torch.cat([f1, warped_f2, pred_flow], dim=1))
+    
+    pred_flow = pred_flow + delta_flow
+
+    # Regulariation Unit
+    
+
     
     return pred_flow + prev_flow
 
