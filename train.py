@@ -11,7 +11,7 @@ import torch.nn as nn
 import neptune.new as neptune
 
 from datasets import MpiSintel
-from losses import L2
+from losses import L2Loss
 from utils.flow_utils import flow2img
 
 from model import LiteFlowNet
@@ -47,7 +47,7 @@ parser.add_argument('--batch_size', type=int,
 parser.add_argument('--maximum_epoch', type=int, 
   default = 100, help='maximum epoch')
 parser.add_argument('--test_interval', type=int, 
-  default = 2, help='test interval(epoch) while training')
+  default = 5, help='test interval(epoch) while training')
 
 '''logging argument'''
 parser.add_argument('--log_dir', 
@@ -88,7 +88,7 @@ model = model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
 
 '''Loss'''
-criterion = L2()
+criterion = L2Loss()
 
 '''logging'''
 if args.neptune:
@@ -103,6 +103,7 @@ for epoch in range(args.maximum_epoch):
   optimizer.zero_grad()
   '''train loop'''
   losses = []
+  epes = [] # end point error
   for itr, data in enumerate(tqdm(train_loader)):
     input_image1 = data[0][0][:, :, 0, :, :].cuda() # --> B, 3, 384, 1024
     input_image2 = data[0][0][:, :, 1, :, :].cuda() # --> B, 3, 384, 1024
@@ -110,25 +111,29 @@ for epoch in range(args.maximum_epoch):
 
     pred_flow = model(input_image1, input_image2)
     
-    loss = criterion(pred_flow, target_flow)
+    loss, epe = criterion(pred_flow, target_flow)
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
 
     losses.append(loss.item())
+    epes.append(epe.item())
     if args.neptune:
       nlogger["train/loss"].log(loss.item())
+      nlogger["train/epe"].log(epe.item())
     
   train_loss = np.mean(losses)
+  train_aee = np.mean(epes)
   print("[{}/{}] train loss | {:<7.3f}".format(epoch, args.maximum_epoch, train_loss))
-  if train_loss < best_loss:
-    torch.save(model.state_dict(), os.path.join(args.log_dir, "weights/best.pkl"))
-  
+  print("[{}/{}] train AEE | {:<7.3f}".format(epoch, args.maximum_epoch, train_aee))
+
   '''evaluation loop'''   
   if epoch % args.test_interval == 0:
     with torch.no_grad():
       model = model.eval()
       losses = []
+      epes = [] # end point error
+  
       for itr, data in enumerate(test_loader):
         input_image1 = data[0][0][:, :, 0, :, :].cuda() # --> B, 3, 384, 1024
         input_image2 = data[0][0][:, :, 1, :, :].cuda() # --> B, 3, 384, 1024
@@ -136,17 +141,18 @@ for epoch in range(args.maximum_epoch):
         
         pred_flow = model(input_image1, input_image2)
   
-        loss = criterion(pred_flow, target_flow)
+        loss, epe = criterion(pred_flow, target_flow)
         losses.append(loss.item())
-      
-        save_path = os.path.join(args.log_dir, "pred", "{}_{}.png".format(epoch, itr))
-        visualize_result(input_image1[0].cpu(), input_image2[0].cpu(), pred_flow[0].cpu(), save_path)
+        epes.append(epe.item())
+        
         break
-      
+      save_path = os.path.join(args.log_dir, "pred", "{}_{}.png".format(epoch, itr))
+      visualize_result(input_image1[0].cpu(), input_image2[0].cpu(), pred_flow[0].cpu(), save_path)
       test_loss = np.mean(losses)
-      print("[{}/{}] test loss | {:<7.3f}".format(epoch, args.maximum_epoch, test_loss))
+      test_aee = np.mean(epes)
+      print("[{}/{}] test loss | {:<7.3f} | test AEE | {:<7.3f}".format(epoch, args.maximum_epoch, test_loss, test_aee))
 
-      # if test_loss < best_loss:
-      #   best_loss = test_loss
-      #   torch.save(model.state_dict(), os.path.join(args.log_dir, "weights/best.pkl"))
+      if test_loss < best_loss:
+        best_loss = test_loss
+        torch.save(model.state_dict(), os.path.join(args.log_dir, "weights/best.pkl"))
     
