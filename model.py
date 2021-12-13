@@ -79,9 +79,8 @@ class NetE(nn.Module):
     # Matching Unit
     self.M_upconv = deconv(2, 2)
 
-    #TODO:
-    self.M_fwarp = None
-    self.M_corr = None
+    self.M_fwarp = backwarp
+    self.M_corr = correlation.FunctionCorrelation
     
     self.M_corr_conv = nn.Conv2d(feature_dim*2, 49, 1, 1)
     
@@ -129,8 +128,11 @@ class NetE(nn.Module):
       prev_flow = 0.0
     else:
       prev_flow = self.M_upconv(prev_flow)
-    
+      # feature warping
+      f2 = self.M_fwarp(f2, prev_flow)
+      
     cost = self.M_corr_conv(torch.cat((f1, f2), dim=1))
+    # cost = self.M_corr(f1, f2, intStride=1)
     pred_flow = self.M_conv(cost)
     
     return pred_flow + prev_flow
