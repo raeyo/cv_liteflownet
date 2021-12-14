@@ -17,7 +17,7 @@ from utils.flow_utils import flow2img
 from model import LiteFlowNet
 
 from tools import LiteFlowNetLoss, visualize_result
-
+torch.set_num_threads(10)
 if __name__=="__main__":
   parser = argparse.ArgumentParser()
 
@@ -36,7 +36,7 @@ if __name__=="__main__":
   parser.add_argument('--batch_size', type=int, 
     default = 4, help='batch size for training')
   parser.add_argument('--maximum_epoch', type=int, 
-    default = 100, help='maximum epoch')
+    default = 400, help='maximum epoch')
   parser.add_argument('--test_interval', type=int, 
     default = 1, help='test interval(epoch)')
   parser.add_argument('--gpu', default="0", help='gpu id')
@@ -44,7 +44,7 @@ if __name__=="__main__":
 
   '''logging argument'''
   parser.add_argument('--log_dir', 
-    default='/data2/raeyo/results/liteflownet_MSR_stage', help='logging dir')
+    default='/data2/raeyo/results/liteflownet_MSR_final', help='logging dir')
   
   args = parser.parse_args()
   
