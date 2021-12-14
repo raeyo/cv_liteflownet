@@ -32,12 +32,14 @@ class StaticCenterCrop(object):
     return img[(self.h-self.th)//2:(self.h+self.th)//2, (self.w-self.tw)//2:(self.w+self.tw)//2,:]
 
 class MpiSintel(data.Dataset):
-  def __init__(self, args, is_cropped=False, root = '', dstype='clean', replicates = 1):
+  def __init__(self, args, is_cropped=False, root = '', dstype='clean', split="train", replicates = 1):
     self.args = args
     self.is_cropped = is_cropped
     self.crop_size = args.crop_size
     self.render_size = args.inference_size
     self.replicates = replicates
+
+    self.split = split
 
     flow_root = join(root, 'flow')
     image_root = join(root, dstype)
@@ -48,7 +50,12 @@ class MpiSintel(data.Dataset):
 
     for file in file_list:
       if 'test' in file:
-        # print file
+        continue
+      
+      if self.split == "train" and 'alley' in file:
+        continue
+      
+      if self.split == "test" and not 'alley' in file:
         continue
 
       fbase = file[len(flow_root)+1:]

@@ -24,17 +24,21 @@ def deconv(in_channels, out_channels):
   )
 #reference: https://github.com/sniklaus/pytorch-liteflownet
 backwarp_tenGrid = {}
+
 def backwarp(tenInput, tenFlow):
 	if str(tenFlow.shape) not in backwarp_tenGrid:
 		tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 
                              1.0 - (1.0 / tenFlow.shape[3]), 
                              tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
-		tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
+		tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 
+                             1.0 - (1.0 / tenFlow.shape[2]), 
+                             tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
 
 		backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([ tenHor, tenVer ], 1).cuda()
 	# end
 
-	tenFlow = torch.cat([ tenFlow[:, 0:1, :, :] / ((tenInput.shape[3] - 1.0) / 2.0), tenFlow[:, 1:2, :, :] / ((tenInput.shape[2] - 1.0) / 2.0) ], 1)
+	tenFlow = torch.cat([ tenFlow[:, 0:1, :, :] / ((tenInput.shape[3] - 1.0) / 2.0), 
+                        tenFlow[:, 1:2, :, :] / ((tenInput.shape[2] - 1.0) / 2.0) ], 1)
 
 	return torch.nn.functional.grid_sample(input=tenInput, grid=(backwarp_tenGrid[str(tenFlow.shape)] + tenFlow).permute(0, 2, 3, 1), mode='bilinear', padding_mode='zeros', align_corners=False)
 # end
@@ -144,12 +148,15 @@ class NetE(nn.Module):
     
     pred_flow = prev_flow + delta_flow # elementwise-sum
 
+    M_flow = pred_flow
+
     # Subpixel Refinement
     warped_f2 = self.S_fwarp(f2, pred_flow)
     delta_flow = self.S_conv(torch.cat([f1, warped_f2, pred_flow], dim=1))
     
     pred_flow = pred_flow + delta_flow
 
+    S_flow = pred_flow
     # Regulariation Unit
     
     # remove mean of flow field
@@ -177,7 +184,9 @@ class NetE(nn.Module):
     
     pred_flow = torch.cat([u_flow, v_flow], dim=1)
     
-    return pred_flow
+    R_flow = pred_flow
+    
+    return M_flow, S_flow, R_flow
 
 class LiteFlowNet(nn.Module):
   
@@ -204,7 +213,8 @@ class LiteFlowNet(nn.Module):
     # pyramid features: [F1, F2, F3, F4, F5, F6]
     # feature dim:      3 -> [32, 32, 64, 96, 128, 192]
     # image size(height): 384 -> [384, 192, 96, 48, 24, 12]
-    flow = None
+    prev_flow = None
+    pred_flows = []
     for level in range(6):
       level = 5 - level
       im1 = Resize((height//(2**level), width//(2**level)))(I1)
@@ -213,6 +223,8 @@ class LiteFlowNet(nn.Module):
       f1 = pyramid_features1[level]
       f2 = pyramid_features2[level]
       
-      flow = self.flow_estimator[level](f1, f2, flow, im1, im2)
+      pred_flow = self.flow_estimator[level](f1, f2, prev_flow, im1, im2)
+      pred_flows.append(pred_flow)
+      prev_flow = pred_flow[2]
 
-    return flow
+    return pred_flows
