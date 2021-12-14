@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torchvision.transforms import Resize
+import imageio
 
 from utils.flow_utils import flow2img
 
@@ -52,15 +53,29 @@ class LiteFlowNetLoss(nn.Module):
       pred_unit_idx = [0, 1] # Unit (M, S, R)
       
     elif train_stage < 6:
-      # Train R unit for level6
+      # Train M, S, R unit for level6
       pred_level_idx = [0] # level
       pred_unit_idx = [0, 1, 2] # unit
       
-    elif train_stage < 8:
+    elif train_stage < 12:
+      # Train M,S,R for level 6 ~ 5
+      pred_level_idx = [0, 1] # level
+      pred_unit_idx = [0, 1, 2] # unit
+    
+    elif train_stage < 18:
+      # Train M,S,R for level 6 ~ 4
+      pred_level_idx = [0, 1, 2] # level
+      pred_unit_idx = [0, 1, 2] # unit
+    
+    elif train_stage < 24:
+      # Train M,S,R for level 6 ~ 3
+      pred_level_idx = [0, 1, 2, 3] # level
+      pred_unit_idx = [0, 1, 2] # unit
+    
+    elif train_stage < 30:
       # Train M,S,R for level 6 ~ 2
       pred_level_idx = [0, 1, 2, 3, 4] # level
       pred_unit_idx = [0, 1, 2] # unit
-      
     else:
       # Train Whole Network
       pred_level_idx = [0, 1, 2, 3, 4, 5] # level
@@ -74,3 +89,7 @@ class LiteFlowNetLoss(nn.Module):
     
     return loss
     
+def save_image2gif(image_list, save_path, fps=10):
+  imageio.mimsave(save_path, image_list, fps=fps)
+
+

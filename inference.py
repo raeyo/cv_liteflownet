@@ -20,22 +20,29 @@ from tools import LiteFlowNetLoss, visualize_result
 
 parser = argparse.ArgumentParser()
 '''Dataset arguments'''
+parser.add_argument('--root', 
+    default='/data2/raeyo/optical_flow/MPI-Sintel/training', help='data root of MPI Sintel training dataset')
+#region reference: https://github.com/NVIDIA/flownet2-pytorch
 parser.add_argument('--crop_size', type=int, nargs='+', 
 default = [384, 768], help="Spatial dimension to crop training samples for training")
 parser.add_argument('--inference_size', type=int, nargs='+', 
 default = [384, 768], help='spatial size divisible by 64. default (-1,-1) - largest possible valid size would be used')
-parser.add_argument('--gpu', default="7", help='gpu id')
+parser.add_argument('--gpu', default="0", help='gpu id')
+#endregion
 
+parser.add_argument('--log_dir', 
+    default='/data2/raeyo/results/liteflownet_MSR_stage', help='logging dir')
+  
 args = parser.parse_args()
 
 os.environ["CUDA_DEVICE_ORDER"]= "PCI_BUS_ID" 
 os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 
 # log_dir = "/data2/raeyo/results/liteflownet_MSR_stage"
-log_dir = "/data2/raeyo/results/liteflownet_MSR_e2e"
+log_dir = args.log_dir
 
 '''load dataset'''
-data_root = "/data2/raeyo/optical_flow/MPI-Sintel/training"
+data_root = args.root
 test_dataset = MpiSintel(args, is_cropped=False, root=data_root, split="test")
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
 
@@ -43,19 +50,11 @@ test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=
 '''load Model'''
 model = LiteFlowNet()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if torch.cuda.device_count() > 1:
-  print("Using {} gpu!".format(torch.cuda.device_count()))
-  model = nn.DataParallel(model)
 model = model.to(device)
-
 state_dict = torch.load(os.path.join(log_dir, "weights/best.pkl"))
 model.load_state_dict(state_dict)
 
-
-
 criterion = LiteFlowNetLoss()
-
-
 
 with torch.no_grad():
   model = model.eval()

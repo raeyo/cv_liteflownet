@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+'''
+Reference:
+https://github.com/sniklaus/pytorch-liteflownet
+'''
 
 import torch
 
