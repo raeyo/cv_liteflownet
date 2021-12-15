@@ -47,32 +47,32 @@ class LiteFlowNetLoss(nn.Module):
       pred_level_idx = [5] # level
       pred_unit_idx = [2]
     
-    elif train_stage < 4:
+    elif train_stage < 3:
       # Train M, S unit for level6
       pred_level_idx = [0] # level
       pred_unit_idx = [0, 1] # Unit (M, S, R)
       
-    elif train_stage < 6:
+    elif train_stage < 5:
       # Train M, S, R unit for level6
       pred_level_idx = [0] # level
       pred_unit_idx = [0, 1, 2] # unit
       
-    elif train_stage < 12:
+    elif train_stage < 8:
       # Train M,S,R for level 6 ~ 5
       pred_level_idx = [0, 1] # level
       pred_unit_idx = [0, 1, 2] # unit
     
-    elif train_stage < 18:
+    elif train_stage < 11:
       # Train M,S,R for level 6 ~ 4
       pred_level_idx = [0, 1, 2] # level
       pred_unit_idx = [0, 1, 2] # unit
     
-    elif train_stage < 24:
+    elif train_stage < 14:
       # Train M,S,R for level 6 ~ 3
       pred_level_idx = [0, 1, 2, 3] # level
       pred_unit_idx = [0, 1, 2] # unit
     
-    elif train_stage < 30:
+    elif train_stage < 17:
       # Train M,S,R for level 6 ~ 2
       pred_level_idx = [0, 1, 2, 3, 4] # level
       pred_unit_idx = [0, 1, 2] # unit
