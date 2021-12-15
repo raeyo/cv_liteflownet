@@ -36,7 +36,7 @@ if __name__=="__main__":
   parser.add_argument('--batch_size', type=int, 
     default = 4, help='batch size for training')
   parser.add_argument('--maximum_epoch', type=int, 
-    default = 400, help='maximum epoch')
+    default = 200, help='maximum epoch')
   parser.add_argument('--test_interval', type=int, 
     default = 1, help='test interval(epoch)')
   parser.add_argument('--gpu', default="0", help='gpu id')
@@ -45,6 +45,8 @@ if __name__=="__main__":
   '''logging argument'''
   parser.add_argument('--log_dir', 
     default='/data2/raeyo/results/liteflownet_MSR_final', help='logging dir')
+  parser.add_argument('--neptune', 
+    action='store_true', help='neptune logging')
   
   args = parser.parse_args()
   
@@ -57,6 +59,11 @@ if __name__=="__main__":
     os.mkdir(args.log_dir)
     os.mkdir(os.path.join(args.log_dir, "weights"))
     os.mkdir(os.path.join(args.log_dir, "pred"))
+  if args.neptune:
+    nlogger = neptune.init(
+      project="raeyo/liteflownet",
+      api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI0OTA1Mzk4OS04MWI4LTQ5YjctYTViZi1iZDEyNjFlOWJmMzAifQ==",
+      )
   
   '''load dataset'''
   data_root = args.root
@@ -64,10 +71,12 @@ if __name__=="__main__":
   
   train_dataset = MpiSintel(args, is_cropped=True, root=data_root, split="train")
   train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=1)
-
+  
   test_dataset = MpiSintel(args, is_cropped=False, root=data_root, split="test")
   test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
 
+  print("Train Data: {}".format(len(train_dataset)))
+  print("Test Data: {}".format(len(test_dataset)))
   '''data example'''
   images, flow = train_dataset[0]
   
@@ -99,7 +108,7 @@ if __name__=="__main__":
 
       pred_flows = model(input_image1, input_image2)
       
-      loss = criterion(pred_flows, target_flow, train_stage=(itr//10))
+      loss = criterion(pred_flows, target_flow, train_stage=(epoch//10))
       
       loss.backward()
       optimizer.step()
@@ -109,6 +118,8 @@ if __name__=="__main__":
       
     train_loss = np.mean(losses)
     print("[{}/{}] train loss | {:<7.3f}".format(epoch, args.maximum_epoch, train_loss))
+    if args.neptune:
+      nlogger["train/loss"].log(train_loss)
     '''evaluation loop'''   
     if epoch % args.test_interval == 0:
       with torch.no_grad():
@@ -127,7 +138,8 @@ if __name__=="__main__":
         
         test_loss = np.mean(losses)
         print("[{}/{}] test loss | {:<7.3f}".format(epoch, args.maximum_epoch, test_loss))
-        
+        if args.neptune:
+          nlogger["test/loss"].log(test_loss)
         if test_loss < best_loss:
           best_loss = train_loss
           best_epoch = epoch
